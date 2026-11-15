@@ -1,0 +1,6 @@
+# Activate with: --spring.profiles.active=postgres  (docker compose up -d starts the database)
+spring:
+  datasource:
+    url: jdbc:postgresql://localhost:5432/notifications
+    username: notifications
+    password: notifications

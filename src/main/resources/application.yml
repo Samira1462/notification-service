@@ -1,0 +1,108 @@
+spring:
+  application:
+    name: notification-service
+
+  kafka:
+    bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
+    producer:
+      acks: all
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: org.springframework.kafka.support.serializer.JsonSerializer
+      properties:
+        enable.idempotence: true
+        linger.ms: 5
+        # Must be >= linger.ms + request.timeout.ms (Kafka rejects the producer config otherwise).
+        request.timeout.ms: 10000
+        delivery.timeout.ms: 30000
+        # The consumer side maps JSON to NotificationEvent itself, so no type headers are needed.
+        spring.json.add.type.headers: false
+    consumer:
+      group-id: notification-workers
+      auto-offset-reset: earliest
+      enable-auto-commit: false
+      max-poll-records: 50
+      key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      # ErrorHandlingDeserializer turns a poison pill into a DeserializationException
+      # (routed to the DLQ) instead of an infinite fetch/fail loop.
+      value-deserializer: org.springframework.kafka.support.serializer.ErrorHandlingDeserializer
+      properties:
+        spring.deserializer.value.delegate.class: org.springframework.kafka.support.serializer.JsonDeserializer
+        spring.json.value.default.type: com.example.notifications.model.NotificationEvent
+        spring.json.trusted.packages: com.example.notifications.model
+        spring.json.use.type.headers: false
+    listener:
+      ack-mode: record
+
+  datasource:
+    url: jdbc:h2:mem:notifications;DB_CLOSE_DELAY=-1
+    username: sa
+    password: ""
+  jpa:
+    open-in-view: false
+    hibernate:
+      ddl-auto: update   # use Flyway/Liquibase migrations in production
+
+server:
+  port: 8080
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics,prometheus
+  metrics:
+    tags:
+      application: ${spring.application.name}
+
+notification:
+  # PER_CHANNEL: one topic per channel (independent scaling/config).
+  # SHARED: one topic for every event, routed inside the worker.
+  topic-mode: PER_CHANNEL
+
+  topics:
+    shared: notification-events
+    email: notifications.email
+    sms: notifications.sms
+    push: notifications.push
+    dlq: notifications.dlq
+    # Partition count caps consumer parallelism. Plan it up front: it is painful to change later.
+    partitions: 6
+    replicas: 1
+
+  # Listener threads per instance, per channel. Total useful parallelism = partitions.
+  concurrency:
+    email: 3
+    sms: 2
+    push: 3
+  shared-concurrency: 6
+
+  # How long the HTTP API waits for the broker to acknowledge an event.
+  publish-timeout: 10s
+
+  # Blocking, in-consumer retries with exponential backoff before the record goes to the DLQ.
+  retry:
+    max-retries: 4
+    initial-interval: 500ms
+    multiplier: 2.0
+    max-interval: 10s
+
+  # Outbound throttling PER INSTANCE. Size it to (provider contract / number of instances),
+  # or move to a shared limiter (e.g. Redis) if you need a cluster-wide limit.
+  rate-limit:
+    email:
+      limit-for-period: 50
+      refresh-period: 1s
+      timeout: 5s
+    sms:
+      limit-for-period: 10
+      refresh-period: 1s
+      timeout: 5s
+    push:
+      limit-for-period: 100
+      refresh-period: 1s
+      timeout: 5s
+
+  providers:
+    # Probability (0..1) that a simulated provider call fails with a retryable error.
+    simulated-failure-rate: 0.0
+    simulated-latency: 20ms
