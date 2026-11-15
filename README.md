@@ -334,7 +334,3 @@ recipient format, waits a few milliseconds and can fail on purpose. To go live, 
 - Kafka runs with a single broker and no replication or security settings.
 - Logs should be checked so they never contain personal data.
 
-## Credits
-
-The design follows the article *"Designing a Notification System at Scale with Spring Boot and Kafka"*
-by Keyhole Software.
