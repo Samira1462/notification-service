@@ -1,6 +1,6 @@
 services:
   kafka:
-    image: apache/kafka:3.9.0
+    image: apache/kafka:3.9.1
     container_name: notifications-kafka
     ports:
       - "9092:9092"

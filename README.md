@@ -44,7 +44,7 @@ inspected and sent again later.
 | Database | PostgreSQL 16 |
 | Rate limiting | Resilience4j |
 | Metrics | Micrometer, Prometheus, Grafana |
-| Tests | JUnit 5, embedded Kafka, Testcontainers (PostgreSQL), MockMvc |
+| Tests | JUnit 5, Testcontainers (Kafka, PostgreSQL), MockMvc |
 | Build | Maven |
 
 ## Quick start
@@ -274,9 +274,9 @@ mvn verify
 ```
 
 - `TemplateRendererTest` covers template rendering and its errors.
-- `NotificationFlowTest` runs the whole pipeline against an embedded Kafka broker and a
-  PostgreSQL 16 container started by Testcontainers (**Docker must be running**), with a scripted
-  provider. It covers a normal delivery, a redelivered duplicate, retry then success,
+- `NotificationFlowTest` runs the whole pipeline against real Kafka 3.9.1 and PostgreSQL 16
+  containers started by Testcontainers (**Docker must be running**; the same images as
+  `docker-compose.yml`), with a scripted provider. It covers a normal delivery, a redelivered duplicate, retry then success,
   a permanent failure going to the DLQ, retries running out followed by a successful replay, an invalid
   message that must not block the queue, and the REST API (duplicate handling, validation, 404).
 
