@@ -41,10 +41,10 @@ inspected and sent again later.
 | Language | Java 21 |
 | Framework | Spring Boot 3.5 (Web, Validation, Data JPA, Actuator) |
 | Messaging | Apache Kafka 3.9, Spring for Apache Kafka |
-| Database | H2 in memory (default) or PostgreSQL 16 |
+| Database | PostgreSQL 16 |
 | Rate limiting | Resilience4j |
 | Metrics | Micrometer, Prometheus, Grafana |
-| Tests | JUnit 5, embedded Kafka, MockMvc |
+| Tests | JUnit 5, embedded Kafka, Testcontainers (PostgreSQL), MockMvc |
 | Build | Maven |
 
 ## Quick start
@@ -52,8 +52,8 @@ inspected and sent again later.
 Requirements: **JDK 21+**, **Maven 3.9+**, **Docker**.
 
 ```bash
-docker compose up -d kafka    # start Kafka
-mvn spring-boot:run           # start the service on http://localhost:8080
+docker compose up -d kafka postgres   # start Kafka and PostgreSQL
+mvn spring-boot:run                   # start the service on http://localhost:8080
 ```
 
 Send a notification:
@@ -95,7 +95,7 @@ curl localhost:8080/api/notifications/order-A-1001
  Business services / REST API
         │  POST /api/notifications
         ▼
- ① save record as PENDING ──► notification_record table (H2 / Postgres)
+ ① save record as PENDING ──► notification_record table (PostgreSQL)
         │
         ▼  ② publish to Kafka, key = userId
  ┌─────────────────────┐ ┌─────────────────────┐ ┌─────────────────────┐
@@ -245,13 +245,8 @@ with command-line arguments or environment variables.
 | `publish-timeout` | `10s` | How long the API waits for Kafka before answering `503` |
 | `providers.simulated-failure-rate` | `0.0` | Share of simulated provider calls that fail temporarily (0 to 1) |
 | `KAFKA_BOOTSTRAP_SERVERS` (env) | `localhost:9092` | Kafka address |
-
-### Using PostgreSQL
-
-```bash
-docker compose up -d kafka postgres
-mvn spring-boot:run -Dspring-boot.run.profiles=postgres
-```
+| `DB_URL` (env) | `jdbc:postgresql://localhost:5432/notifications` | PostgreSQL connection URL |
+| `DB_USERNAME`, `DB_PASSWORD` (env) | `notifications` / `notifications` | PostgreSQL credentials (match `docker-compose.yml`) |
 
 ## Monitoring
 
@@ -279,8 +274,9 @@ mvn verify
 ```
 
 - `TemplateRendererTest` covers template rendering and its errors.
-- `NotificationFlowTest` runs the whole pipeline against an embedded Kafka broker (no Docker needed)
-  with a scripted provider. It covers a normal delivery, a redelivered duplicate, retry then success,
+- `NotificationFlowTest` runs the whole pipeline against an embedded Kafka broker and a
+  PostgreSQL 16 container started by Testcontainers (**Docker must be running**), with a scripted
+  provider. It covers a normal delivery, a redelivered duplicate, retry then success,
   a permanent failure going to the DLQ, retries running out followed by a successful replay, an invalid
   message that must not block the queue, and the REST API (duplicate handling, validation, 404).
 

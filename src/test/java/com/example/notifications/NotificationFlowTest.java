@@ -35,6 +35,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.context.TestConfiguration;
+import org.springframework.boot.testcontainers.service.connection.ServiceConnection;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Primary;
 import org.springframework.http.MediaType;
@@ -47,10 +48,13 @@ import org.springframework.kafka.test.context.EmbeddedKafka;
 import org.springframework.kafka.test.utils.KafkaTestUtils;
 import org.springframework.test.annotation.DirtiesContext;
 import org.springframework.test.web.servlet.MockMvc;
+import org.testcontainers.containers.PostgreSQLContainer;
+import org.testcontainers.junit.jupiter.Container;
+import org.testcontainers.junit.jupiter.Testcontainers;
 
 /**
- * End-to-end tests against an embedded Kafka broker and an in-memory H2 database. The providers are
- * replaced by a scripted one so failures are deterministic.
+ * End-to-end tests against an embedded Kafka broker and a PostgreSQL container (Testcontainers, so
+ * Docker must be running). The providers are replaced by a scripted one so failures are deterministic.
  */
 @SpringBootTest(
         properties = {
@@ -62,7 +66,12 @@ import org.springframework.test.web.servlet.MockMvc;
 @EmbeddedKafka(partitions = 1, bootstrapServersProperty = "spring.kafka.bootstrap-servers")
 @AutoConfigureMockMvc
 @DirtiesContext
+@Testcontainers
 class NotificationFlowTest {
+
+    @Container
+    @ServiceConnection
+    static final PostgreSQLContainer<?> POSTGRES = new PostgreSQLContainer<>("postgres:16");
 
     static final ScriptedProvider PROVIDER = new ScriptedProvider();
 
