@@ -35,6 +35,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.context.TestConfiguration;
+import org.springframework.boot.testcontainers.service.connection.ServiceConnection;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Primary;
 import org.springframework.http.MediaType;
@@ -42,15 +43,17 @@ import org.springframework.kafka.core.DefaultKafkaConsumerFactory;
 import org.springframework.kafka.core.DefaultKafkaProducerFactory;
 import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.kafka.support.KafkaHeaders;
-import org.springframework.kafka.test.EmbeddedKafkaBroker;
-import org.springframework.kafka.test.context.EmbeddedKafka;
 import org.springframework.kafka.test.utils.KafkaTestUtils;
 import org.springframework.test.annotation.DirtiesContext;
 import org.springframework.test.web.servlet.MockMvc;
+import org.testcontainers.containers.PostgreSQLContainer;
+import org.testcontainers.junit.jupiter.Container;
+import org.testcontainers.junit.jupiter.Testcontainers;
+import org.testcontainers.kafka.KafkaContainer;
 
 /**
- * End-to-end tests against an embedded Kafka broker and an in-memory H2 database. The providers are
- * replaced by a scripted one so failures are deterministic.
+ * End-to-end tests against real Kafka and PostgreSQL containers (Testcontainers, so Docker must be
+ * running), using the same images as {@code docker-compose.yml}. The providers are replaced by a scripted one so failures are deterministic.
  */
 @SpringBootTest(
         properties = {
@@ -59,10 +62,18 @@ import org.springframework.test.web.servlet.MockMvc;
             "notification.retry.initial-interval=50ms",
             "notification.retry.max-interval=200ms"
         })
-@EmbeddedKafka(partitions = 1, bootstrapServersProperty = "spring.kafka.bootstrap-servers")
 @AutoConfigureMockMvc
 @DirtiesContext
+@Testcontainers
 class NotificationFlowTest {
+
+    @Container
+    @ServiceConnection
+    static final PostgreSQLContainer<?> POSTGRES = new PostgreSQLContainer<>("postgres:16");
+
+    @Container
+    @ServiceConnection
+    static final KafkaContainer KAFKA = new KafkaContainer("apache/kafka:3.9.1");
 
     static final ScriptedProvider PROVIDER = new ScriptedProvider();
 
@@ -78,7 +89,6 @@ class NotificationFlowTest {
     @Autowired NotificationPublisher publisher;
     @Autowired NotificationRecordRepository repository;
     @Autowired NotificationProperties properties;
-    @Autowired EmbeddedKafkaBroker broker;
     @Autowired MockMvc mvc;
 
     @BeforeEach
@@ -168,7 +178,7 @@ class NotificationFlowTest {
     void poisonPillGoesToTheDeadLetterTopicAndDoesNotBlockTheQueue() throws Exception {
         String garbage = "{ this is not json " + UUID.randomUUID();
         DefaultKafkaProducerFactory<String, String> factory = new DefaultKafkaProducerFactory<>(
-                KafkaTestUtils.producerProps(broker), new StringSerializer(), new StringSerializer());
+                KafkaTestUtils.producerProps(KAFKA.getBootstrapServers()), new StringSerializer(), new StringSerializer());
         try {
             new KafkaTemplate<>(factory)
                     .send(properties.topics().email(), "poison-user", garbage)
@@ -240,7 +250,7 @@ class NotificationFlowTest {
 
     /** Waits for a record on the DLQ whose value contains {@code needle} (an event id or raw payload). */
     private ConsumerRecord<String, String> awaitDeadLetter(String needle) {
-        Map<String, Object> config = KafkaTestUtils.consumerProps("dlq-test-" + UUID.randomUUID(), "true", broker);
+        Map<String, Object> config = KafkaTestUtils.consumerProps(KAFKA.getBootstrapServers(), "dlq-test-" + UUID.randomUUID(), "true");
         config.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
         try (Consumer<String, String> consumer =
                 new DefaultKafkaConsumerFactory<>(config, new StringDeserializer(), new StringDeserializer())

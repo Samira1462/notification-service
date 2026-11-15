@@ -33,10 +33,11 @@ spring:
     listener:
       ack-mode: record
 
+  # PostgreSQL. `docker compose up -d postgres` starts a matching local database.
   datasource:
-    url: jdbc:h2:mem:notifications;DB_CLOSE_DELAY=-1
-    username: sa
-    password: ""
+    url: ${DB_URL:jdbc:postgresql://localhost:5432/notifications}
+    username: ${DB_USERNAME:notifications}
+    password: ${DB_PASSWORD:notifications}
   jpa:
     open-in-view: false
     hibernate:
