@@ -227,6 +227,9 @@ src/main/java/com/example/notifications/
 ├── model/          NotificationEvent (the Kafka message), NotificationType, NotificationStatus
 ├── config/         Kafka topics, producers, retry and dead-letter handling, typed properties
 └── observability/  Micrometer metrics
+
+src/test/java/      Unit tests (*Test.java): fast, no Docker
+src/it/java/        Integration tests (*IT.java): real Kafka + PostgreSQL via Testcontainers
 ```
 
 ## Configuration
@@ -269,16 +272,28 @@ docker compose up -d prometheus grafana
 
 ## Tests
 
+Tests are split into two folders, each run by its own Maven plugin:
+
+| | Unit tests | Integration tests |
+|---|---|---|
+| Folder | `src/test/java` | `src/it/java` |
+| Class name | `*Test.java` | `*IT.java` |
+| Run by | Surefire, in the `test` phase | Failsafe, in the `integration-test` and `verify` phases |
+| Needs Docker | no | **yes** (Testcontainers starts Kafka and PostgreSQL) |
+| Speed | under a second | about 20 seconds |
+
 ```bash
-mvn verify
+mvn test                # unit tests only
+mvn verify              # unit tests, then integration tests
+mvn verify -DskipITs    # build without the integration tests (e.g. no Docker available)
 ```
 
-- `TemplateRendererTest` covers template rendering and its errors.
-- `NotificationFlowTest` runs the whole pipeline against real Kafka 3.9.1 and PostgreSQL 16
-  containers started by Testcontainers (**Docker must be running**; the same images as
-  `docker-compose.yml`), with a scripted provider. It covers a normal delivery, a redelivered duplicate, retry then success,
-  a permanent failure going to the DLQ, retries running out followed by a successful replay, an invalid
-  message that must not block the queue, and the REST API (duplicate handling, validation, 404).
+- `TemplateRendererTest` (unit) covers template rendering and its errors.
+- `NotificationFlowIT` (integration) runs the whole pipeline against real Kafka 3.9.1 and
+  PostgreSQL 16 containers (the same images as `docker-compose.yml`), with a scripted provider. It
+  covers a normal delivery, a redelivered duplicate, retry then success, a permanent failure going to
+  the DLQ, retries running out followed by a successful replay, an invalid message that must not
+  block the queue, and the REST API (duplicate handling, validation, 404).
 
 ## Delivery guarantees and limitations
 

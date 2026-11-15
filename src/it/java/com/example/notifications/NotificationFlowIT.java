@@ -65,7 +65,7 @@ import org.testcontainers.kafka.KafkaContainer;
 @AutoConfigureMockMvc
 @DirtiesContext
 @Testcontainers
-class NotificationFlowTest {
+class NotificationFlowIT {
 
     @Container
     @ServiceConnection
